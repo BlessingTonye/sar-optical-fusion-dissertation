@@ -9,17 +9,17 @@ from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_sc
 
 def evaluate_macro_f1(model, loader, n_classes, device):
     """
-    Computes validation macro-F1 for a model, used for checkpoint
-    selection and early stopping during training.
+    Calculates macro-F1 on the validation dataset for checkpoint
+    selection and early stopping during model training.
 
     Args:
-        model (nn.Module): trained or in-training model to evaluate.
-        loader (DataLoader): validation data loader.
-        n_classes (int): number of segmentation classes.
-        device (torch.device): device to run evaluation on.
+        model (nn.Module): Segmentation model to evaluate.
+        loader (DataLoader): DataLoader containing the validation dataset.
+        n_classes (int): Number of segmentation classes.
+        device (torch.device): Device used for model evaluation.
 
     Returns:
-        float: macro-averaged F1 score across all classes.
+        float: Macro-F1 score across all segmentation classes.
     """
     model.eval()
     all_preds, all_targets = [], []
@@ -41,20 +41,18 @@ def evaluate_macro_f1(model, loader, n_classes, device):
 
 def evaluate_full_metrics(model, loader, n_classes, class_names, device):
     """
-    Computes a full suite of evaluation metrics (overall accuracy,
-    Cohen's Kappa, macro-F1, macro-precision, macro-recall, mean IoU)
-    plus per-class breakdowns and a confusion matrix.
+    Calculates the overall and per-class evaluation metrics for a
+    single-input segmentation model, together with the confusion matrix.
 
     Args:
-        model (nn.Module): trained model to evaluate.
-        loader (DataLoader): test/validation data loader.
-        n_classes (int): number of segmentation classes.
-        class_names (dict): mapping of class index to class name.
-        device (torch.device): device to run evaluation on.
+        model (nn.Module): Trained segmentation model to evaluate.
+        loader (DataLoader): DataLoader containing the validation or test dataset.
+        n_classes (int): Number of segmentation classes.
+        class_names (dict): Mapping of class indices to class names.
+        device (torch.device): Device used for model evaluation.
 
     Returns:
-        tuple: (results dict, per-class F1, per-class precision,
-                per-class recall, confusion matrix array).
+        tuple: Overall metrics, per-class F1, per-class precision, per-class recall, and confusion matrix.
     """
     model.eval()
     all_preds, all_targets = [], []
@@ -75,50 +73,46 @@ def evaluate_full_metrics(model, loader, n_classes, class_names, device):
     labels = list(range(n_classes))
 
     results = {
-        'overall_accuracy': accuracy_score(y_true, y_pred),  # % of all pixels correctly classified
-        'cohen_kappa': cohen_kappa_score(y_true, y_pred),  # accuracy adjusted for chance agreement
-        'macro_f1': f1_score(y_true, y_pred, labels=labels, average='macro'),  # F1 averaged equally across classes
-        'macro_precision': precision_score(y_true, y_pred, labels=labels, average='macro', zero_division=0),  # correctness of positive predictions, averaged across classes
-        'macro_recall': recall_score(y_true, y_pred, labels=labels, average='macro', zero_division=0),  # coverage of actual positives found, averaged across classes
-        'mean_iou': jaccard_score(y_true, y_pred, labels=labels, average='macro'),  # overlap between predicted and true regions, averaged across classes
+        'overall_accuracy': accuracy_score(y_true, y_pred),
+        'cohen_kappa': cohen_kappa_score(y_true, y_pred), 
+        'macro_f1': f1_score(y_true, y_pred, labels=labels, average='macro'),
+        'macro_precision': precision_score(y_true, y_pred, labels=labels, average='macro', zero_division=0),  
+        'macro_recall': recall_score(y_true, y_pred, labels=labels, average='macro', zero_division=0),  
+        'mean_iou': jaccard_score(y_true, y_pred, labels=labels, average='macro'),  
     }
 
-    # same four metrics, computed separately per class instead of averaged
+    # Calculate class-specific metrics without macro-averaging
     per_class_f1 = f1_score(y_true, y_pred, labels=labels, average=None, zero_division=0)
     per_class_precision = precision_score(y_true, y_pred, labels=labels, average=None, zero_division=0)
     per_class_recall = recall_score(y_true, y_pred, labels=labels, average=None, zero_division=0)
-    cm = confusion_matrix(y_true, y_pred, labels=labels)  # rows = true class, columns = predicted class
+    cm = confusion_matrix(y_true, y_pred, labels=labels)  
 
     return results, per_class_f1, per_class_precision, per_class_recall, cm
 
 
 def evaluate_full_metrics_dual(model, loader, n_classes, class_names, device):
     """
-    Computes a full suite of evaluation metrics (overall accuracy,
-    Cohen's Kappa, macro-F1, macro-precision, macro-recall, mean IoU)
-    plus per-class breakdowns and a confusion matrix, for a two-input
-    (dual-encoder) model such as MiddleFusionUNet.
+    Calculates the overall and per-class evaluation metrics for the
+    dual-input Middle Fusion model, together with the confusion matrix.
 
     Args:
-        model (nn.Module): trained two-input model to evaluate.
-        loader (DataLoader): test/validation data loader yielding
-            (img_s1, img_s2, label) per batch.
-        n_classes (int): number of segmentation classes.
-        class_names (dict): mapping of class index to class name.
-        device (torch.device): device to run evaluation on.
+        model (nn.Module): Trained dual-input segmentation model to evaluate.
+        loader (DataLoader): DataLoader containing corresponding SAR and optical inputs with their labels.
+        n_classes (int): Number of segmentation classes.
+        class_names (dict): Mapping of class indices to class names.
+        device (torch.device): Device used for model evaluation.
 
     Returns:
-        tuple: (results dict, per-class F1, per-class precision,
-                per-class recall, confusion matrix array).
+        tuple: Overall metrics, per-class F1, per-class precision, per-class recall, and confusion matrix.
     """
     model.eval()
     all_preds, all_targets = [], []
 
     with torch.no_grad():
-        for img_s1, img_s2, lbls in loader:
-            img_s1 = img_s1.to(device)
-            img_s2 = img_s2.to(device)
-            preds = model(img_s1, img_s2).argmax(dim=1).cpu().numpy().flatten()
+        for img_sar, img_optical, lbls in loader:
+            img_sar = img_sar.to(device)
+            img_optical = img_optical.to(device)
+            preds = model(img_sar, img_optical).argmax(dim=1).cpu().numpy().flatten()
             targets = lbls.numpy().flatten()
             all_preds.append(preds)
             all_targets.append(targets)
@@ -147,19 +141,18 @@ def evaluate_full_metrics_dual(model, loader, n_classes, class_names, device):
     return results, per_class_f1, per_class_precision, per_class_recall, cm
 
 
-def plot_confusion_matrices_for_dissertation(cm1, cm2, class_names, title1, title2, normalize=True):
+def plot_confusion_matrices(cm1, cm2, class_names, title1, title2, normalize=True):
     """
-    Plots two confusion matrices side by side, for direct comparison
-    between two models.
+    Plots two confusion matrices side by side to support direct
+    comparison between two segmentation models.
 
     Args:
-        cm1 (ndarray): confusion matrix for the first model.
-        cm2 (ndarray): confusion matrix for the second model.
-        class_names (dict): mapping of class index to class name.
-        title1 (str): subplot title for the first matrix.
-        title2 (str): subplot title for the second matrix.
-        normalize (bool): whether to display row-wise percentages
-            instead of raw counts.
+        cm1 (ndarray): Confusion matrix for the first model.
+        cm2 (ndarray): Confusion matrix for the second model.
+        class_names (dict): Mapping of class indices to class names.
+        title1 (str): Title for the first confusion matrix.
+        title2 (str): Title for the second confusion matrix.
+        normalize (bool): Whether to display row-wise proportions instead of raw counts.
     """
     if normalize:
         cm1 = cm1.astype('float') / cm1.sum(axis=1, keepdims=True)
@@ -186,31 +179,31 @@ def plot_confusion_matrices_for_dissertation(cm1, cm2, class_names, title1, titl
 
 def compute_error_map(true_label, pred):
     """
-    Computes a pixel-wise correct/incorrect map by comparing a
-    model's prediction against ground truth.
+    Creates a pixel-level error map by comparing the predicted and
+    reference class labels.
 
     Args:
-        true_label (ndarray): ground truth label array.
-        pred (ndarray): predicted label array, same shape as true_label.
+        true_label (ndarray): Reference label array.
+        pred (ndarray): Predicted label array with the same shape as the reference labels.
 
     Returns:
-        ndarray: binary array, 1 where correct, 0 where incorrect.
+        ndarray: Binary array where 1 indicates a correct prediction and 0 indicates an incorrect prediction.
     """
     return (pred == true_label).astype(int)
 
 
 def plot_error_map_comparison(true_label, pred1, pred2, class_names, title1, title2):
     """
-    Plots ground truth, prediction, and a correct/incorrect error map
-    for two models on the same test patch, for direct comparison.
+    Displays the reference labels, model predictions, and pixel-level
+    error maps for two models on the same test patch.
 
     Args:
-        true_label (ndarray): ground truth label array for the patch.
-        pred1 (ndarray): predicted label array for the first model.
-        pred2 (ndarray): predicted label array for the second model.
-        class_names (dict): mapping of class index to class name.
-        title1 (str): row label for the first model.
-        title2 (str): row label for the second model.
+        true_label (ndarray): Reference label array for the test patch.
+        pred1 (ndarray): Predicted label array from the first model.
+        pred2 (ndarray): Predicted label array from the second model.
+        class_names (dict): Mapping of class indices to class names.
+        title1 (str): Name displayed for the first model.
+        title2 (str): Name displayed for the second model.
     """
     class_colors = ['darkgreen', 'yellowgreen', 'blue', 'gray']
     cmap_classes = mcolors.ListedColormap(class_colors)
@@ -245,5 +238,4 @@ def plot_error_map_comparison(true_label, pred1, pred2, class_names, title1, tit
     fig.legend(handles=error_patches, loc='lower center', bbox_to_anchor=(0.5, -0.02), ncol=2, fontsize=10)
 
     plt.tight_layout()
-    plt.savefig('/content/error_map_comparison.png', dpi=300, bbox_inches='tight', facecolor='white')
     plt.show()

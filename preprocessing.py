@@ -4,14 +4,14 @@ import rasterio
 
 def file_upload(file_path):
     """
-    Loads a GeoTIFF into a NumPy array, converting the NoData
-    sentinel value back to NaN.
+    Loads a GeoTIFF file into a NumPy array and converts the NoData
+    value to NaN for subsequent processing.
 
     Args:
-        file_path (str): path to the GeoTIFF file.
+        file_path (str): Path to the GeoTIFF file.
 
     Returns:
-        tuple: (image array, rasterio profile dict).
+        tuple: Image array and corresponding Rasterio profile.
     """
     with rasterio.open(file_path) as src:
         image = src.read().astype('float32')
@@ -25,19 +25,19 @@ def file_upload(file_path):
 
 def percentile_normalise(image, band_names):
     """
-    Normalizes each band of an image to [0, 1] using 2nd-98th
-    percentile stretching, preserving NaN values.
+    Normalises each image band to the range [0, 1] using its 2nd and
+    98th percentile values while preserving NaN values.
 
     Args:
-        image (ndarray): image array, shape (bands, H, W).
-        band_names (list): names of each band, for reference.
+        image (ndarray): Image array with shape (bands, H, W).
+        band_names (list): Names of the image bands.
 
     Returns:
-        ndarray: normalized image, same shape as input.
+        ndarray: Normalised image array with the same shape as the input.
     """
     normalised_image = np.empty_like(image, dtype=np.float32)
 
-    for i, band in enumerate(band_names):
+    for i, _ in enumerate(band_names):
         band_data = image[i]
         p2 = np.nanpercentile(band_data, 2)
         p98 = np.nanpercentile(band_data, 98)
@@ -53,22 +53,18 @@ def percentile_normalise(image, band_names):
 
 def extract_and_filter_patches(image, label, patch_size=256, stride=128, nan_threshold=0.5):
     """
-    Extracts fixed-size patches from a raster and its corresponding
-    label array, discarding patches whose NaN proportion exceeds
-    a given threshold.
+    Extracts fixed-size image and label patches and removes patches
+    whose proportion of NaN values exceeds the specified threshold.
 
     Args:
-        image (ndarray): image array, shape (bands, H, W).
-        label (ndarray): label array, shape (H, W).
-        patch_size (int): height/width of each extracted patch.
-        stride (int): step size between adjacent patch positions.
-        nan_threshold (float): maximum allowed fraction of NaN pixels
-            per patch before it is discarded.
+        image (ndarray): Image array with shape (bands, H, W).
+        label (ndarray): Corresponding label array with shape (H, W).
+        patch_size (int): Height and width of each extracted patch.
+        stride (int): Number of pixels between consecutive patch positions.
+        nan_threshold (float): Maximum proportion of NaN values allowed in a retained image patch.
 
     Returns:
-        tuple: (list of retained image patches, list of retained label
-                patches, list of (row, col) positions, dict of extraction
-                statistics).
+        tuple: Retained image patches, label patches, patch positions, and extraction statistics.
     """
     filtered_patches = []
     filtered_labels = []

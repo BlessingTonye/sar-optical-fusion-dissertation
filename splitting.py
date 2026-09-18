@@ -5,15 +5,16 @@ from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 
 def compute_patch_proportions(labels, num_classes=4):
     """
-    Computes the proportion of pixels belonging to each class,
-    for every patch.
+    Calculates the proportion of pixels belonging to each class for
+    every extracted label patch.
 
     Args:
-        labels (list): list of label patches (arrays), each shape (H, W).
-        num_classes (int): number of segmentation classes.
+        labels (list): List of label patches with shape (H, W).
+        num_classes (int): Number of segmentation classes.
 
     Returns:
-        ndarray: shape (n_patches, num_classes), per-patch class proportions.
+        ndarray: Per-patch class proportions with shape
+            (n_patches, num_classes).
     """
     proportion_matrix = []
     for lbl in labels:
@@ -30,17 +31,18 @@ def compute_patch_proportions(labels, num_classes=4):
 
 def compute_block_proportions(positions, proportions, block_size=512):
     """
-    Groups patches into spatial blocks and computes the mean
-    class proportion within each block.
+    Groups patches into spatial blocks and calculates the mean class
+    proportions for each block.
 
     Args:
-        positions (list): list of (row, col) patch positions.
-        proportions (ndarray): per-patch class proportions from compute_patch_proportions().
-        block_size (int): block size in pixels.
+        positions (list): List of patch positions as (row, column) coordinates.
+        proportions (ndarray): Per-patch class proportions from
+            compute_patch_proportions().
+        block_size (int): Spatial block size in pixels.
 
     Returns:
-        tuple: (patches_df with block_id assigned per patch,
-                block_props DataFrame with mean class proportions per block).
+        tuple: Patch DataFrame with block IDs and block-level class
+            proportions.
     """
     rows = np.array([p[0] for p in positions])
     cols = np.array([p[1] for p in positions])
@@ -64,19 +66,20 @@ def compute_block_proportions(positions, proportions, block_size=512):
 
 def stratified_block_split(block_props, test_size=0.15, val_size=0.15, class_threshold=0.005, random_state=42):
     """
-    Splits spatial blocks into train/val/test using multi-label
-    stratified shuffle splitting on class-presence indicators.
+    Splits spatial blocks into training, validation, and test sets
+    using multi-label stratified shuffle splitting based on class
+    presence within each block.
 
     Args:
-        block_props (DataFrame): mean class proportions per block.
-        test_size (float): fraction of blocks assigned to test.
-        val_size (float): fraction of blocks assigned to validation.
-        class_threshold (float): minimum proportion for a class to
-            count as "present" in a block.
-        random_state (int): random seed for reproducibility.
+        block_props (DataFrame): Mean class proportions for each spatial block.
+        test_size (float): Fraction of blocks assigned to the test split.
+        val_size (float): Fraction of blocks assigned to the validation split.
+        class_threshold (float): Minimum class proportion required for a class
+            to be considered present in a block.
+        random_state (int): Random seed used for reproducibility.
 
     Returns:
-        tuple: (train_blocks, val_blocks, test_blocks) block ID arrays.
+        tuple: Training, validation, and test block ID arrays.
     """
     y_blocks = (block_props.values >= class_threshold).astype(int)
     x_blocks = block_props.index.values
@@ -96,17 +99,17 @@ def stratified_block_split(block_props, test_size=0.15, val_size=0.15, class_thr
 
 def assign_patch_splits(patches_df, train_blocks, val_blocks, test_blocks):
     """
-    Maps each patch to its split (train/val/test) based on which
-    spatial block it belongs to.
+    Assigns each patch to the training, validation, or test split
+    according to its spatial block.
 
     Args:
-        patches_df (DataFrame): patch-level DataFrame with a block_id column.
-        train_blocks (array-like): block IDs assigned to training.
-        val_blocks (array-like): block IDs assigned to validation.
-        test_blocks (array-like): block IDs assigned to test.
+        patches_df (DataFrame): Patch-level DataFrame containing a block_id column.
+        train_blocks (array-like): Block IDs assigned to the training split.
+        val_blocks (array-like): Block IDs assigned to the validation split.
+        test_blocks (array-like): Block IDs assigned to the test split.
 
     Returns:
-        DataFrame: patches_df with a new 'split' column added.
+        DataFrame: Patch DataFrame with an additional split column.
     """
     split_map = {block: 'train' for block in train_blocks}
     split_map.update({block: 'val' for block in val_blocks})
@@ -118,18 +121,17 @@ def assign_patch_splits(patches_df, train_blocks, val_blocks, test_blocks):
 
 def compute_class_weights(patches_df, num_classes=4):
     """
-    Computes inverse-frequency class weights from per-patch class
-    proportions, for use in a weighted loss function under class
-    imbalance.
+    Calculates inverse frequency class weights from the class
+    proportions in the training split for use in the weighted loss
+    function.
 
     Args:
-        patches_df (DataFrame): patch-level DataFrame with columns
-            'class_0_prop' ... 'class_{num_classes-1}_prop', typically
-            filtered to the training split only.
-        num_classes (int): number of segmentation classes.
+        patches_df (DataFrame): Patch-level DataFrame containing the class
+            proportion columns for the training split.
+        num_classes (int): Number of segmentation classes.
 
     Returns:
-        ndarray: shape (num_classes,), inverse-frequency weight per class.
+        ndarray: Inverse frequency weight for each segmentation class.
     """
     class_cols = [f'class_{c}_prop' for c in range(num_classes)]
     mean_class_freq = patches_df[class_cols].mean().to_numpy()

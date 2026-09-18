@@ -12,26 +12,27 @@ from torch.utils.data import DataLoader
 def train_config(model, config_name, train_ds, val_ds, weights_tensor, n_classes, device,
                   checkpoint_dir, max_epochs, patience, batch_size, lr, weight_decay):
     """
-    Trains a segmentation model with checkpoint selection and early
-    stopping based on validation macro-F1.
+    Trains a single-input segmentation model and selects the best
+    checkpoint based on validation macro-F1. Training stops early when
+    validation macro-F1 does not improve for the specified patience.
 
     Args:
-        model (nn.Module): model to train.
-        config_name (str): identifier used to name the checkpoint folder.
-        train_ds (Dataset): training dataset.
-        val_ds (Dataset): validation dataset.
-        weights_tensor (Tensor): inverse-frequency class weights.
-        n_classes (int): number of segmentation classes.
-        device (torch.device): device to train on.
-        checkpoint_dir (str): base directory for saved checkpoints.
-        max_epochs (int): maximum number of training epochs.
-        patience (int): epochs to wait for improvement before stopping.
-        batch_size (int): training/validation batch size.
-        lr (float): learning rate for AdamW.
-        weight_decay (float): weight decay for AdamW.
+        model (nn.Module): Segmentation model to train.
+        config_name (str): Name used to identify the model configuration and checkpoint folder.
+        train_ds (Dataset): Dataset used for model training.
+        val_ds (Dataset): Dataset used for model validation.
+        weights_tensor (Tensor): Class weights used by the loss function.
+        n_classes (int): Number of segmentation classes.
+        device (torch.device): Device used for model training.
+        checkpoint_dir (str): Directory for saving model checkpoints.
+        max_epochs (int): Maximum number of training epochs.
+        patience (int): Number of epochs without validation macro-F1 improvement before early stopping.
+        batch_size (int): Batch size used for training and validation.
+        lr (float): Learning rate used by the AdamW optimiser.
+        weight_decay (float): Weight decay used by the AdamW optimiser.
 
     Returns:
-        tuple: (checkpoint path, best validation macro-F1, training history dict).
+        tuple: Path to the best checkpoint, best validation macro-F1, and training history.
     """
     model = model.to(device)
     criterion = CombinedLoss(class_weights=weights_tensor.to(device), n_classes=n_classes)
@@ -101,27 +102,28 @@ def train_config(model, config_name, train_ds, val_ds, weights_tensor, n_classes
 def train_config_dual(config_name, model, train_ds, val_ds, weights_tensor, n_classes, device,
                        checkpoint_dir, max_epochs, patience, batch_size, lr, weight_decay):
     """
-    Trains a two-input (dual-encoder) segmentation model, such as
-    MiddleFusionUNet, with checkpoint selection and early stopping
-    based on validation macro-F1.
+    Trains a dual-input segmentation model for the Middle Fusion
+    configuration and selects the best checkpoint based on validation
+    macro-F1. Training stops early when validation macro-F1 does not
+    improve for the specified patience.
 
     Args:
-        config_name (str): identifier used to name the checkpoint folder.
-        model (nn.Module): two-input model to train (expects forward(x_s1, x_s2)).
-        train_ds (Dataset): training dataset, yielding (img_s1, img_s2, label) per item.
-        val_ds (Dataset): validation dataset, same format as train_ds.
-        weights_tensor (Tensor): inverse-frequency class weights.
-        n_classes (int): number of segmentation classes.
-        device (torch.device): device to train on.
-        checkpoint_dir (str): base directory for saved checkpoints.
-        max_epochs (int): maximum number of training epochs.
-        patience (int): epochs to wait for improvement before stopping.
-        batch_size (int): training/validation batch size.
-        lr (float): learning rate for AdamW.
-        weight_decay (float): weight decay for AdamW.
+        config_name (str): Name used to identify the model configuration and checkpoint folder.
+        model (nn.Module): Dual-input segmentation model to train.
+        train_ds (Dataset): Training dataset containing corresponding SAR and optical inputs with their labels.
+        val_ds (Dataset): Validation dataset containing corresponding SAR and optical inputs with their labels.
+        weights_tensor (Tensor): Class weights used by the loss function.
+        n_classes (int): Number of segmentation classes.
+        device (torch.device): Device used for model training.
+        checkpoint_dir (str): Directory for saving model checkpoints.
+        max_epochs (int): Maximum number of training epochs.
+        patience (int): Number of epochs without validation macro-F1 improvement before early stopping.
+        batch_size (int): Batch size used for training and validation.
+        lr (float): Learning rate used by the AdamW optimiser.
+        weight_decay (float): Weight decay used by the AdamW optimiser.
 
     Returns:
-        tuple: (checkpoint path, best validation macro-F1, training history dict).
+        tuple: Path to the best checkpoint, best validation macro-F1, and training history.
     """
     model = model.to(device)
     criterion = CombinedLoss(class_weights=weights_tensor.to(device), n_classes=n_classes)
@@ -141,10 +143,10 @@ def train_config_dual(config_name, model, train_ds, val_ds, weights_tensor, n_cl
     for epoch in range(max_epochs):
         model.train()
         train_loss = 0
-        for img_s1, img_s2, lbls in train_loader:
-            img_s1, img_s2, lbls = img_s1.to(device), img_s2.to(device), lbls.to(device)
+        for img_sar, img_optical, lbls in train_loader:
+            img_sar, img_optical, lbls = img_sar.to(device), img_optical.to(device), lbls.to(device)
             optimizer.zero_grad()
-            logits = model(img_s1, img_s2)
+            logits = model(img_sar, img_optical)
             loss = criterion(logits, lbls)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -157,9 +159,9 @@ def train_config_dual(config_name, model, train_ds, val_ds, weights_tensor, n_cl
         val_loss = 0
         all_preds, all_targets = [], []
         with torch.no_grad():
-            for img_s1, img_s2, lbls in val_loader:
-                img_s1, img_s2, lbls = img_s1.to(device), img_s2.to(device), lbls.to(device)
-                logits = model(img_s1, img_s2)
+            for img_sar, img_optical, lbls in val_loader:
+                img_sar, img_optical, lbls = img_sar.to(device), img_optical.to(device), lbls.to(device)
+                logits = model(img_sar, img_optical)
                 val_loss += criterion(logits, lbls).item()
                 preds = logits.argmax(dim=1).cpu().numpy().flatten()
                 all_preds.append(preds)

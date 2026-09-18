@@ -5,12 +5,13 @@ import torch.nn.functional as F
 
 class SoftDiceLoss(nn.Module):
     """
-    Computes soft Dice loss for multi-class segmentation, measuring
-    overlap between predicted and true class regions per class.
+    Calculates soft Dice loss for multi-class semantic segmentation
+    by measuring the overlap between predicted and reference class
+    regions.
 
     Args:
-        n_classes (int): number of segmentation classes.
-        smooth (float): small constant to prevent division by zero.
+        n_classes (int): Number of segmentation classes.
+        smooth (float): Small constant used to prevent division by zero.
     """
     def __init__(self, n_classes, smooth=1e-6):
         super().__init__()
@@ -19,12 +20,16 @@ class SoftDiceLoss(nn.Module):
 
     def forward(self, logits, targets):
         """
+        Calculates soft Dice loss while excluding invalid pixels.
+
         Args:
-            logits (Tensor): raw model output, shape (batch, n_classes, H, W).
-            targets (Tensor): true class indices, shape (batch, H, W), with -1 for invalid pixels.
+            logits (Tensor): Raw model outputs with shape
+                (batch, n_classes, H, W).
+            targets (Tensor): Reference class indices with shape
+                (batch, H, W), where -1 represents invalid pixels.
 
         Returns:
-            Tensor: scalar loss value.
+            Tensor: Scalar soft Dice loss.
         """
         valid_mask = (targets != -1)
         safe_targets = torch.where(valid_mask, targets, torch.zeros_like(targets))
@@ -42,14 +47,14 @@ class SoftDiceLoss(nn.Module):
 
 class CombinedLoss(nn.Module):
     """
-    Combines weighted cross-entropy and soft Dice loss for training
-    under class imbalance.
+    Combines weighted cross-entropy loss and soft Dice loss to account
+    for class imbalance while also considering class-region overlap.
 
     Args:
-        class_weights (Tensor): inverse-frequency weights per class, applied to the cross-entropy term.
-        n_classes (int): number of segmentation classes.
-        ce_weight (float): weighting of the cross-entropy term in the combined loss.
-        dice_weight (float): weighting of the Dice term in the combined loss.
+        class_weights (Tensor): Class weights applied to the cross-entropy loss.
+        n_classes (int): Number of segmentation classes.
+        ce_weight (float): Weight assigned to the cross-entropy loss.
+        dice_weight (float): Weight assigned to the soft Dice loss.
     """
     def __init__(self, class_weights, n_classes, ce_weight=0.6, dice_weight=0.4):
         super().__init__()
@@ -60,12 +65,17 @@ class CombinedLoss(nn.Module):
 
     def forward(self, logits, targets):
         """
+        Calculates the weighted combination of cross-entropy and
+        soft Dice loss.
+
         Args:
-            logits (Tensor): raw model output, shape (batch, n_classes, H, W).
-            targets (Tensor): true class indices, shape (batch, H, W), with -1 for invalid pixels.
+            logits (Tensor): Raw model outputs with shape
+                (batch, n_classes, H, W).
+            targets (Tensor): Reference class indices with shape
+                (batch, H, W), where -1 represents invalid pixels.
 
         Returns:
-            Tensor: scalar combined loss value.
+            Tensor: Scalar combined loss.
         """
         ce = self.ce_loss(logits, targets)
         dice = self.dice_loss(logits, targets)
